@@ -13,19 +13,110 @@ composer require erlandmuchasaj/laravel-file-uploader
 
 ## Usage
 
-Sanitize library offers a sanitize method that takes a parameter a dirty string parameter and return a cleaned string.  
+Laravel File Uploader offers an easy way to upload files to different disks. 
+The main purpose of the package is to remove the repeated and cumbersome code and simplify it into some simple methods.
+
 
 ```php
 use ErlandMuchasaj\LaravelFileUploader\FileUploader;
 
-$dirtyString = 'Hello - World';
+Route::post('/files', function (\Illuminate\Http\Request $request) {
 
-$sanitizedString = FileUploader::upload($file);
+    $max_size = (int) ini_get('upload_max_filesize') * 1000;
+    
+    $extensions = implode(',', FileUploader::images());
 
-// do something with the sanitized text
-// you can: $words = explode(' ', $sanitizedString);
-// and search the DB per each word.
+    $request->validate([
+        'file' => [
+            'required',
+            'file',
+            'image',
+            'mimes:' . $extensions,
+            'max:'.$max_size,
+        ]
+    ]);
 
+    $file = $request->file('file');
+
+    $response = FileUploader::store($file);
+    
+    // do something with the $response
+    // you can save it into your model etc.
+    
+    return redirect()
+            ->back()
+            ->with('success','File has been uploaded.')
+            ->with('file', $response);
+})->name('files.store');
+
+/**
+ *  $response = [
+ *      "type" => "image"
+ *      "extension" => "png"
+ *      "_extension" => "png"
+ *      "name" => "blog3"
+ *      "original_name" => "blog3.png"
+ *      "size" => 549247
+ *      "mime_type" => "image/png"
+ *      "dimensions" => "670x841"
+ *      "path" => "uploads/1/image/blog3_1678118034.png" // <==
+ *      "url" => "/storage/uploads/1/image/blog3_1678118034.png"
+ *      "user_id" => 1
+ *      "disk" => "local"
+ *      "visibility" => "public"
+ *      "uuid" => "dd5889c0-5057-49ef-a6ef-e3da961a47d1"
+ *  ]
+*/
+
+```
+
+If you need to modify the config files, you should publish the migration and the config/permission.php config file 
+with:
+```bash
+php artisan vendor:publish --provider="ErlandMuchasaj\LaravelFileUploader\FileUploaderServiceProvider"
+```
+
+Some other helper methods:
+
+```php
+    $path = 'uploads/1/image/blog3_1678118034.png';
+    $response = FileUploader::get($path); // get file as StreamedResponse
+    $response = FileUploader::getFile($path); // get file as content.
+    $response = FileUploader::url($path); // full path url - /storage/uploads/1/image/blog3_1678118034.png
+    $response = FileUploader::path($path); // C:\wamp\www\laravel-app\storage\app\uploads/1/image/blog3_1678118034.png
+    $response = FileUploader::meta($path);
+    /**
+    * [
+    *     "path" => "C:\wamp\www\laravel-app\storage\app\uploads/1/image/blog3_1678118034.png"
+    *     "url" => "/storage/uploads/1/image/blog3_1678118034.png"
+    *     "visibility" => "public"
+    *     "mimeType" => "image/png"
+    *     "size" => "536.37 KB"
+    *     "last_modified" => "1 hour ago"
+    *     "name" => "blog3_1678118034.png"
+    *     "pathinfo" => [
+    *         "dirname" => "uploads/1/image"
+    *         "basename" => "blog3_1678118034.png"
+    *         "extension" => "png"
+    *         "filename" => "blog3_1678118034"
+    *     ]
+    * ]
+    */
+        
+    $response = FileUploader::download($path, 'something_nice'); // download the file as StreamedResponse
+    $response = FileUploader::getVisibility($path); // file visibility when applicable private/public
+    $response = FileUploader::setVisibility($path, 'private'); // change file visibility
+    $response = FileUploader::remove($path); // delete a file
+```
+
+Also, some other size converting helper functions are available for example:
+
+```php
+    $size = 549247;
+    FileUploader::formatBytes($size); // "536.37 KB"
+    
+    FileUploader::convertBytesToSpecified($size, 'KB'); // 536.37KB
+    FileUploader::convertBytesToSpecified($size, 'MB'); // 0.52MB
 ```
 
 ---

@@ -15,6 +15,7 @@
         "laravel",
         "library",
         "cms",
+        "emcms",
         "package"
     ],
     "autoload": {

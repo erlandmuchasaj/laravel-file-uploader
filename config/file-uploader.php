@@ -7,8 +7,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Here you may specify the default filesystem disk that should be used
-    | by the framework. The "local" disk, as well as a variety of cloud
-    | based disks are available to your application. Just store away!
+    | by the package.
     |
     */
 
@@ -47,8 +46,8 @@ return [
     | Shall we use safe extension and name extraction
     |--------------------------------------------------------------------------
     |
-    | All files will be grouped by default to root user aka ID=1.
-    | If you have a different default user id you can set it here.
+    | getClientOriginalName() and getClientOriginalExtension()
+    | are considered unsafe.
     |
     */
 
