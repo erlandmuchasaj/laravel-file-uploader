@@ -39,6 +39,9 @@ Route::post('/files', function (\Illuminate\Http\Request $request) {
     $file = $request->file('file');
 
     $response = FileUploader::store($file);
+    // $response = FileUploader::store($file, $options);
+    // available options (as key=>value pare) are:
+    // `disk`, 'user_id`, `path`, `visibility`
     
     // do something with the $response
     // you can save it into your model etc.
