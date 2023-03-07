@@ -1,7 +1,7 @@
 # Laravel File Uploader
 
-This is a PHP package that helps to sanitize your input when performing search queries to DB.
-It cleans the input from all malicious characters.
+Laravel File Uploader offers an easy way to upload files to different disks.
+The main purpose of the package is to remove the repeated and cumbersome code and simplify it into some simple methods.
 
 ## Installation
 
@@ -13,9 +13,8 @@ composer require erlandmuchasaj/laravel-file-uploader
 
 ## Usage
 
-Laravel File Uploader offers an easy way to upload files to different disks. 
-The main purpose of the package is to remove the repeated and cumbersome code and simplify it into some simple methods.
-
+This package has an very easy and straight-forward usage. 
+Just import the package and pass the file as parameter, and it will handle the rest.
 
 ```php
 use ErlandMuchasaj\LaravelFileUploader\FileUploader;
@@ -24,6 +23,8 @@ Route::post('/files', function (\Illuminate\Http\Request $request) {
 
     $max_size = (int) ini_get('upload_max_filesize') * 1000;
     
+    // FileUploader::images() get all image extensions ex: jpg, png, jpeg, gif, etc.
+    // FileUploader::documents() get all documents extensions ex: 'csv', 'html', 'pdf', 'doc', 'docx', 'ppt' etc.
     $extensions = implode(',', FileUploader::images());
 
     $request->validate([
@@ -48,7 +49,7 @@ Route::post('/files', function (\Illuminate\Http\Request $request) {
     
     return redirect()
             ->back()
-            ->with('success','File has been uploaded.')
+            ->with('success', __('File has been uploaded.'))
             ->with('file', $response);
 })->name('files.store');
 
@@ -82,12 +83,12 @@ php artisan vendor:publish --provider="ErlandMuchasaj\LaravelFileUploader\FileUp
 Some other helper methods:
 
 ```php
-    $path = 'uploads/1/image/blog3_1678118034.png';
+    $path = 'uploads/1/image/blog3_1678118034.png'; // the path of the image where is stored.
     $response = FileUploader::get($path); // get file as StreamedResponse
     $response = FileUploader::getFile($path); // get file as content.
     $response = FileUploader::url($path); // full path url - /storage/uploads/1/image/blog3_1678118034.png
     $response = FileUploader::path($path); // C:\wamp\www\laravel-app\storage\app\uploads/1/image/blog3_1678118034.png
-    $response = FileUploader::meta($path);
+    $response = FileUploader::meta($path); // metadata about the file.
     /**
     * [
     *     "path" => "C:\wamp\www\laravel-app\storage\app\uploads/1/image/blog3_1678118034.png"
