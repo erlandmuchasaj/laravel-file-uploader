@@ -72,6 +72,6 @@
         "illuminate/http": "^8|^9|^10",
         "illuminate/support": "^8|^9|^10",
         "illuminate/contracts": "^8|^9|^10",
-        "illuminate/filesystemt": "^8|^9|^10"
+        "illuminate/filesystem": "^8|^9|^10"
     }
 }
