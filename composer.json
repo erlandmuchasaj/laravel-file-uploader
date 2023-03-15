@@ -6,7 +6,6 @@
     "prefer-stable": true,
     "homepage": "https://github.com/erlandmuchasaj/laravel-file-uploader",
     "license": "MIT",
-    "version": "1.0.0",
     "keywords": [
         "file",
         "media",

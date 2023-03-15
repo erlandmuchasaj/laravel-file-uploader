@@ -4,17 +4,14 @@ namespace ErlandMuchasaj\LaravelFileUploader;
 
 //use Illuminate\Foundation\Application as Laravel;
 use Illuminate\Support\ServiceProvider;
+
 class FileUploaderServiceProvider extends ServiceProvider
 {
-
     /**
      * Package name.
      * Abstract type to bind FileUploader as in the Service Container.
-     *
-     * @var string
      */
     public static string $abstract = 'file-uploader';
-
 
     public function register()
     {
@@ -23,18 +20,17 @@ class FileUploaderServiceProvider extends ServiceProvider
         //        }
 
         $this->mergeConfigFrom(
-            __DIR__ . '/../config/file-uploader.php',
+            __DIR__.'/../config/file-uploader.php',
             static::$abstract
         );
     }
-
 
     public function boot()
     {
         if ($this->app->runningInConsole()) {
 //            if ($this->app instanceof Laravel) {
             $this->publishes([
-                __DIR__ . '/../config/file-uploader.php' => config_path(static::$abstract . '.php'),
+                __DIR__.'/../config/file-uploader.php' => config_path(static::$abstract.'.php'),
             ], 'config');
 //            }
         }
@@ -49,5 +45,4 @@ class FileUploaderServiceProvider extends ServiceProvider
     {
         return [static::$abstract];
     }
-
 }
