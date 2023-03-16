@@ -9,6 +9,7 @@ use ErlandMuchasaj\LaravelFileUploader\Exceptions\MissingFile;
 use ErlandMuchasaj\LaravelFileUploader\Exceptions\UploadFailed;
 use Exception;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use League\Flysystem\WhitespacePathNormalizer;
@@ -172,29 +173,11 @@ final class FileUploader
     private static array $archives_ext = ['gzip', 'rar', 'tar', 'zip', '7z'];
 
     /**
-     * Create a new service provider instance.
-     *
-     * @param  mixed  ...$args
-     */
-    public function __construct(...$args)
-    {
-        new FileUploader(...$args);
-    }
-
-    /**
-     * Create e new instance of file uploader.
-     */
-    public static function make(...$args): FileUploader
-    {
-        return new FileUploader(...$args);
-    }
-
-    /**
      * Upload a file into specified disk using
      * specified visibility and then store into DB.
      *
      * @param  array<string, string>  $args
-     * @return array<string, string>
+     * @return array<string, mixed>
      *
      * @throws UploadFailed
      */
@@ -215,7 +198,7 @@ final class FileUploader
      * Upload an image to specific FileSystem
      *
      * @param  array<string, string>  $options
-     * @return array<string, string>
+     * @return array<string, mixed>
      *
      * @throws InvalidUpload
      * @throws InvalidFile
@@ -227,7 +210,7 @@ final class FileUploader
         }
 
         if ($file->getSize() === false) {
-            throw new InvalidFile(__('File failed to load.'));
+            throw new InvalidFile('File failed to load.');
         }
 
         //  // here you can put as many default values as you want.
@@ -277,14 +260,19 @@ final class FileUploader
         $type = self::getType($extension);
 
         // Make a file path where image will be stored [uploads/{user_id}/{type}/{filename}.{ext}]
-        $filePath = self::getUserDir($filenameToStore, $type, $user_id);
+        $filePath = self::getUserDir($filenameToStore, $type, (int) $user_id);
 
         // Upload File to storage disk
-        $path = Storage::disk($disk)->put($filePath, fopen($file, 'r+'), $args['visibility']); // very nice for very big files
+        $fileContent = fopen($file, 'r+');
+        if (! $fileContent) {
+            throw new InvalidUpload('Could not read file from disk...');
+        }
+
+        $path = Storage::disk($disk)->put($filePath, $fileContent, $args['visibility']); // very nice for very big files
 
         // Store $filePath in the database
         if (! $path) {
-            throw new InvalidUpload(__('The file could not be written to disk...'));
+            throw new InvalidUpload('The file could not be written to disk...');
         }
 
 //        dd([
@@ -327,7 +315,7 @@ final class FileUploader
     {
         $defaults = self::getConfig();
 
-        return $user_id ?: $defaults['user_id'];
+        return $user_id ?? (! empty($defaults['user_id']) ? (int) $defaults['user_id'] : 1);
     }
 
     protected static function getDisk(string $disk = null): string
@@ -352,7 +340,7 @@ final class FileUploader
     {
         $config = config(FileUploaderServiceProvider::$abstract);
 
-        return empty($config) ? [] : $config;
+        return empty($config) ? [] : Arr::wrap($config);
     }
 
     /**
@@ -370,14 +358,14 @@ final class FileUploader
      * Create a streamed response for a given file.
      *
      *
-     * @return string Content
+     * @return string|null Content
      *
      * @throws MissingFile
      */
-    public static function getFile(string $path, string $disk = null): string
+    public static function getFile(string $path, string $disk = null): ?string
     {
         if (! Storage::disk(self::getDisk($disk))->exists($path)) {
-            throw new MissingFile(__('File [:file] does not exists.', ['file' => $path]));
+            throw new MissingFile("File $path does not exists.");
         }
 
         return Storage::disk(self::getDisk($disk))->get($path);
@@ -413,7 +401,6 @@ final class FileUploader
     /**
      * Get Visibility of a file
      *
-     *
      * @return string public|private
      */
     public static function getVisibility(string $path, string $disk = null): string
@@ -436,29 +423,22 @@ final class FileUploader
     /**
      * Delete file from disk
      *
-     *
-     *
      * @throws MissingFile
      */
     public static function remove(string $path, bool $throwError = true, string $disk = null): bool
     {
         if ($throwError && ! Storage::disk(self::getDisk($disk))->exists($path)) {
-            throw new MissingFile(__('File does not exist!'));
+            throw new MissingFile('File does not exist!');
         }
 
         return Storage::disk(self::getDisk($disk))->delete($path);
-    }
-
-    public static function getHashFile($file): string
-    {
-        return sha1_file($file->getRealPath());
     }
 
     /**
      * Get meta data for a specific file.
      *
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     public static function meta(string $path, string $disk = null): array
     {
@@ -472,7 +452,6 @@ final class FileUploader
             'size' => self::formatBytes($diskFrom->size($path)),
             'last_modified' => Carbon::createFromTimestamp($diskFrom->lastModified($path))->diffForHumans(),
             'name' => basename($path),
-            'pathinfo' => pathinfo($path),
         ];
     }
 
@@ -543,7 +522,7 @@ final class FileUploader
 
     private static function defaultSanitizer(string $fileName): string
     {
-        $fileName = preg_replace('#\p{C}+#u', '', $fileName);
+        $fileName = (string) preg_replace('#\p{C}+#u', '', $fileName);
 
         return str_replace(['#', '/', '\\', ' '], '-', $fileName);
     }
@@ -604,7 +583,10 @@ final class FileUploader
         return $file instanceof SymfonyFile;
     }
 
-    private static function in_array($needle, $haystack): bool
+    /**
+     * @param  array<string>  $haystack
+     */
+    private static function in_array(mixed $needle, array $haystack): bool
     {
         return in_array(strtolower($needle), array_map('strtolower', $haystack));
     }
@@ -710,13 +692,15 @@ final class FileUploader
             return $mime_types[$ext];
         } elseif (function_exists('finfo_open')) {
             $fileInfo = finfo_open(FILEINFO_MIME);
-            $mimetype = finfo_file($fileInfo, $filename);
-            finfo_close($fileInfo);
+            if ($fileInfo) {
+                $mimetype = finfo_file($fileInfo, $filename);
+                finfo_close($fileInfo);
 
-            return $mimetype;
-        } else {
-            return 'application/octet-stream';
+                return $mimetype;
+            }
         }
+
+        return 'application/octet-stream';
     }
 
     /**

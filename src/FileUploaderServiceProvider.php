@@ -13,26 +13,20 @@ class FileUploaderServiceProvider extends ServiceProvider
      */
     public static string $abstract = 'file-uploader';
 
-    public function register()
+    public function register(): void
     {
-        //        if ($this->app instanceof Lumen) {
-        //            $this->app->configure(static::$abstract);
-        //        }
-
         $this->mergeConfigFrom(
             __DIR__.'/../config/file-uploader.php',
             static::$abstract
         );
     }
 
-    public function boot()
+    public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-//            if ($this->app instanceof Laravel) {
             $this->publishes([
                 __DIR__.'/../config/file-uploader.php' => config_path(static::$abstract.'.php'),
             ], 'config');
-//            }
         }
     }
 
