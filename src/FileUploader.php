@@ -586,7 +586,7 @@ final class FileUploader
     /**
      * @param  array<string>  $haystack
      */
-    private static function in_array(mixed $needle, array $haystack): bool
+    private static function in_array(string $needle, array $haystack): bool
     {
         return in_array(strtolower($needle), array_map('strtolower', $haystack));
     }
