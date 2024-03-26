@@ -2,7 +2,6 @@
 
 namespace ErlandMuchasaj\LaravelFileUploader;
 
-//use Illuminate\Foundation\Application as Laravel;
 use Illuminate\Support\ServiceProvider;
 
 class FileUploaderServiceProvider extends ServiceProvider
