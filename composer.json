@@ -25,7 +25,7 @@
     "extra": {
         "laravel": {
             "providers": [
-              "GzipServiceProvider"
+                "ErlandMuchasaj\\LaravelGzip\\GzipServiceProvider"
             ]
         }
     },
@@ -71,6 +71,7 @@
         "illuminate/http": "^8|^9|^10|^11",
         "illuminate/support": "^8|^9|^10|^11",
         "illuminate/contracts": "^8|^9|^10|^11",
-        "illuminate/filesystem": "^8|^9|^10|^11"
+        "illuminate/filesystem": "^8|^9|^10|^11",
+        "erlandmuchasaj/laravel-gzip": "*"
     }
 }
