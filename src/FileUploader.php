@@ -509,11 +509,11 @@ final class FileUploader
             return self::DOCUMENT;
         }
 
-        if (in_array($ext, self::$font_ext)) {
+        if (self::in_array($ext, self::$font_ext)) {
             return self::FONT;
         }
 
-        if (in_array($ext, self::$archives_ext)) {
+        if (self::in_array($ext, self::$archives_ext)) {
             return self::ARCHIVE;
         }
 
