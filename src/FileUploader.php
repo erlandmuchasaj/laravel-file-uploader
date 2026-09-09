@@ -3,6 +3,7 @@
 namespace ErlandMuchasaj\LaravelFileUploader;
 
 use Carbon\Carbon;
+use ErlandMuchasaj\LaravelFileUploader\Exceptions\FileException;
 use ErlandMuchasaj\LaravelFileUploader\Exceptions\InvalidFile;
 use ErlandMuchasaj\LaravelFileUploader\Exceptions\InvalidUpload;
 use ErlandMuchasaj\LaravelFileUploader\Exceptions\MissingFile;
@@ -32,13 +33,13 @@ final class FileUploader
     protected static array $studlyCache = [];
 
     /**
-     * default constants used to build file path
+     * default constants used to build a file path
      */
     const UPLOAD_PATH = 'uploads/{user_id}/{type}/{filename}';
 
     /**
      * The public visibility setting.
-     * - default
+     * - Default
      *
      * @var string
      */
@@ -88,6 +89,8 @@ final class FileUploader
 
     const SPREADSHEETS = 'spreadsheets';
 
+    const UNKNOWN = 'unknown';
+
     /**
      * Available file types
      *
@@ -102,6 +105,7 @@ final class FileUploader
         self::ARCHIVE,
         self::DOCUMENT,
         self::SPREADSHEETS,
+        self::UNKNOWN,
     ];
 
     /**
@@ -133,7 +137,7 @@ final class FileUploader
      *
      * @var array<int, string>
      */
-    private static array $image_ext = ['jpg', 'pjpg', 'jpe', 'jpeg', 'png', 'bmp', 'gif', 'svg', 'svgz', 'tiff', 'tif', 'webp', 'ico', 'avif'];
+    private static array $image_ext = ['jpg', 'pjpg', 'jpe', 'jpeg', 'png', 'bmp', 'gif', 'svg', 'svgz', 'tiff', 'tif', 'webp', 'ico', 'avif', 'heic', 'psd'];
 
     /**
      * $font_ext
@@ -147,21 +151,21 @@ final class FileUploader
      *
      * @var array<int, string>
      */
-    private static array $audio_ext = ['mp3', 'm4a', 'ogg', 'mpga', 'wav'];
+    private static array $audio_ext = ['mp3', 'm4a', 'ogg', 'mpga', 'wav', 'wma','aac'];
 
     /**
      * $video_ext
      *
      * @var array<int, string>
      */
-    private static array $video_ext = ['smv', 'movie', 'mov', 'wvx', 'wmx', 'wm', 'mp4', 'mp4', 'mp4v', 'mpg4', 'mpeg', 'mpg', 'mpe', 'wmv', 'avi', 'ogv', '3gp', '3g2'];
+    private static array $video_ext = ['smv', 'movie', 'mov', 'wvx', 'wmx', 'wm', 'mp4', 'mp4v', 'mpg4', 'mpeg', 'mpg', 'mpe', 'wmv', 'avi', 'ogv', '3gp', '3g2', 'webm'];
 
     /**
      * $document_ext
      *
      * @var array<int, string>
      */
-    private static array $document_ext = ['css', 'csv', 'html', 'htm', 'conf', 'log', 'txt', 'text', 'pdf', 'doc', 'docx', 'ppt', 'pptx', 'pps', 'ppsx', 'odt', 'xls', 'xlsx'];
+    private static array $document_ext = ['css', 'csv', 'html', 'htm', 'conf', 'log', 'txt', 'text', 'pdf', 'doc', 'docx', 'ppt', 'pptx', 'pps', 'ppsx', 'odt', 'xls', 'xlsx', 'p7m', 'xml', 'js', 'ts', 'json', 'rtf'];
 
     /**
      * $archive
@@ -170,10 +174,10 @@ final class FileUploader
      *
      * @example application/zip
      */
-    private static array $archives_ext = ['gzip', 'rar', 'tar', 'zip', '7z'];
+    private static array $archives_ext = ['gzip', 'rar', 'tar', 'tz',  'zip', '7z'];
 
     /**
-     * Upload a file into specified disk using
+     * Upload a file into a specified disk using
      * specified visibility and then store into DB.
      *
      * @param  array<string, string>  $args
@@ -195,32 +199,36 @@ final class FileUploader
     }
 
     /**
-     * Upload an image to specific FileSystem
+     * Upload an image to a specific FileSystem
      *
-     * @param  array<string, string>  $options
+     * @param UploadedFile $file
+     * @param array<string, string> $options
+     * @param int|null $maxSizeInKilobytes
+     *
      * @return array<string, mixed>
      *
      * @throws InvalidUpload
      * @throws InvalidFile
+     * @throws FileException
      */
-    public static function upload(UploadedFile $file, array $options = []): array
+    public static function upload(UploadedFile $file, array $options = [], ?int $maxSizeInKilobytes = null): array
     {
         if (! $file->isValid()) {
             throw new InvalidFile($file->getErrorMessage());
         }
 
-        if ($file->getSize() === false) {
-            throw new InvalidFile('File failed to load.');
+        if ($file->guessExtension() === null) {
+            throw new FileException('File has been tampered: ' . $file->getClientOriginalName());
         }
 
-        //  // here you can put as many default values as you want.
-        //  $defaults = [
-        //      'disk' => self::$disk, // The disk where the file is being saved.
-        //      'safe' => false, // weather or not to use safe client file operators
-        //      'user_id' => 1, // files are grouped by user.
-        //      'path' => self::UPLOAD_PATH, // Where files are being stored.
-        //      'visibility' => self::VISIBILITY_PUBLIC, // public | private
-        //  ];
+        if ($maxSizeInKilobytes !== null && $file->getSize() > $maxSizeInKilobytes * 1024) {
+            throw new InvalidFile(sprintf(
+                'File exceeds the maximum allowed size of %d KB (actual: %d KB).',
+                $maxSizeInKilobytes,
+                (int) ceil($file->getSize() / 1024)
+            ));
+        }
+
         $defaults = self::getConfig();
 
         // merge default options with passed parameters
@@ -234,27 +242,30 @@ final class FileUploader
 
         $user_id = $args['user_id'] ?? null;
 
+        $useSafe = (bool) ($args['safe'] ?? false);
+
         /**
          * getClientOriginalName() and getClientOriginalExtension() are considered
-         * unsafe therefor we use hashName() and extension()
+         *  unsafe, therefore, we use hashName() and extension()
          */
-        // get filename with extension
-        $filenameWithExtension = $file->getClientOriginalName();
-        // $filenameWithExtension = $file->hashName() ?: $file->getClientOriginalName();
 
-        // get file extension
-        $extension = $file->getClientOriginalExtension();
-        // $extension = $file->extension() ?: $file->getClientOriginalExtension();
+        // get file extension: use server-detected extension when safe mode is on
+        $extension = $useSafe
+            ? ($file->extension() ?: $file->getClientOriginalExtension())
+            : $file->getClientOriginalExtension();
 
-        // get filename without extension
-        $filename = pathinfo($filenameWithExtension, PATHINFO_FILENAME);
+        // get file mimetype: use server-detected mime when safe mode is on
+        $mimeType = $useSafe
+            ? ($file->getMimeType() ?: $file->getClientMimeType())
+            : $file->getClientMimeType();
 
-        // @todo - EM: Check filename normalizer
-        $filename = (new WhitespacePathNormalizer)->normalizePath($filename);
-        $filename = self::defaultSanitizer($filename);
 
-        // filename to store
-        $filenameToStore = $filename.'_'.time().'.'.$extension;
+        $hashName = $useSafe ? $file->hashName() : null;
+        $usingHashName = $hashName !== null && $hashName !== '';
+
+        $filenameToStore = $usingHashName
+            ? $hashName
+            : self::sanitize($file->getClientOriginalName(), $extension);
 
         //  Get the type of file we are storing
         $type = self::getType($extension);
@@ -263,62 +274,68 @@ final class FileUploader
         $filePath = self::getUserDir($filenameToStore, $type, (int) $user_id);
 
         // Upload File to storage disk
-        $fileContent = fopen($file, 'r+');
+        $fileContent = fopen($file->getRealPath(), 'r');
         if (! $fileContent) {
             throw new InvalidUpload('Could not read file from disk...');
         }
 
-        $path = Storage::disk($disk)->put($filePath, $fileContent, $args['visibility']); // very nice for very big files
+        try {
+            $stored = Storage::disk($disk)->put($filePath, $fileContent, $args['visibility']);
+        } finally {
+            fclose($fileContent);
+        }
 
-        // Store $filePath in the database
-        if (! $path) {
+        if (! $stored) {
             throw new InvalidUpload('The file could not be written to disk...');
         }
 
-//        dd([
-//            'type' => $type,
-//            'extension' => $file->getClientOriginalExtension(),
-//            '_extension' =>  $file->extension() ?: $file->getClientOriginalExtension(),
-//            'name' => $filename,
-//            'original_name' => $file->getClientOriginalName(),
-//            'size' => $file->getSize(),
-//            'mime_type' => $file->getClientMimeType(),
-//            'dimensions' => self::getDimensions($file, $type),
-//            'path' => $filePath,
-//            'url' => Storage::disk($disk)->url($filePath),
-//            'user_id' => $user_id,
-//            'disk' => $disk,
-//            'visibility' => $args['visibility'], // indicate if file is public or private
-//            'hash_file' => self::getHashFile($file),
-//            'uuid' => Str::uuid()->toString(),
-//        ]);
-
         return [
             'type' => $type,
-            'extension' => $file->getClientOriginalExtension(),
-            '_extension' => $file->extension() ?: $file->getClientOriginalExtension(),
-            'name' => $filename,
-            'original_name' => $file->getClientOriginalName(),
             'size' => $file->getSize(),
-            'mime_type' => $file->getClientMimeType(),
             'dimensions' => self::getDimensions($file, $type),
-            'path' => $filePath,
-            'url' => Storage::disk($disk)->url($filePath),
+            'uuid' => Str::uuid()->toString(),
+
             'user_id' => $user_id,
             'disk' => $disk,
             'visibility' => $args['visibility'], // indicate if file is public or private
-            'uuid' => Str::uuid()->toString(),
+
+            'extension' => $file->getClientOriginalExtension(),
+            '_extension' => $file->extension() ?: $file->getClientOriginalExtension(),
+            'name' => $filenameToStore,
+            'hashName' => $file->hashName(),
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $mimeType,
+            'path' => $filePath,
+            'url' => Storage::disk($disk)->url($filePath),
         ];
     }
 
-    protected static function getUser(int $user_id = null): ?int
+    protected static function sanitize(string $filename, ?string $extension = null): string
+    {
+        // get filename without extension to store as label in DB.
+        $filename = pathinfo($filename, PATHINFO_FILENAME);
+
+        $filename = (new WhitespacePathNormalizer)->normalizePath($filename);
+        $filename = self::defaultSanitizer($filename);
+
+        if ($filename === '' || $filename === '-') {
+            $filename = Str::random(8);
+        }
+
+        // filename to store
+        $filename = $filename.'_'.now()->format('Ymd_His_u');
+
+        return $extension ? "$filename.$extension" : $filename;
+    }
+
+    protected static function getUser(?int $user_id = null): ?int
     {
         $defaults = self::getConfig();
 
         return $user_id ?? (! empty($defaults['user_id']) ? (int) $defaults['user_id'] : 1);
     }
 
-    protected static function getDisk(string $disk = null): string
+    protected static function getDisk(?string $disk = null): string
     {
         $key = $disk;
 
@@ -338,7 +355,7 @@ final class FileUploader
      */
     protected static function getConfig(): array
     {
-        $config = config(FileUploaderServiceProvider::$abstract);
+        $config = config(FileUploaderServiceProvider::$abstract, []);
 
         return empty($config) ? [] : Arr::wrap($config);
     }
@@ -349,7 +366,7 @@ final class FileUploader
      *
      * @return StreamedResponse Content
      */
-    public static function get(string $path, string $disk = null): StreamedResponse
+    public static function get(string $path, ?string $disk = null): StreamedResponse
     {
         return Storage::disk(self::getDisk($disk))->response($path);
     }
@@ -362,7 +379,7 @@ final class FileUploader
      *
      * @throws MissingFile
      */
-    public static function getFile(string $path, string $disk = null): ?string
+    public static function getFile(string $path, ?string $disk = null): ?string
     {
         if (! Storage::disk(self::getDisk($disk))->exists($path)) {
             throw new MissingFile("File $path does not exists.");
@@ -375,15 +392,15 @@ final class FileUploader
      * Get public path url.
      * Mainly used to access public files.
      */
-    public static function url(string $path, string $disk = null): string
+    public static function url(string $path, ?string $disk = null): string
     {
         return Storage::disk(self::getDisk($disk))->url($path);
     }
 
     /**
-     * Get file path.
+     * Get a file path.
      */
-    public static function path(string $path, string $disk = null): string
+    public static function path(string $path, ?string $disk = null): string
     {
         return Storage::disk(self::getDisk($disk))->path($path);
     }
@@ -393,7 +410,7 @@ final class FileUploader
      *
      * @param  string|null  $name name with extensions.
      */
-    public static function download(string $path, string|null $name, string $disk = null): StreamedResponse
+    public static function download(string $path, string|null $name, ?string $disk = null): StreamedResponse
     {
         return Storage::disk(self::getDisk($disk))->download($path, $name);
     }
@@ -403,7 +420,7 @@ final class FileUploader
      *
      * @return string public|private
      */
-    public static function getVisibility(string $path, string $disk = null): string
+    public static function getVisibility(string $path, ?string $disk = null): string
     {
         return Storage::disk(self::getDisk($disk))->getVisibility($path);
     }
@@ -411,7 +428,7 @@ final class FileUploader
     /**
      * Set Visibility of a file
      */
-    public static function setVisibility(string $path, string $visibility, string $disk = null): bool
+    public static function setVisibility(string $path, string $visibility, ?string $disk = null): bool
     {
         if (! in_array($visibility, self::$validOptions, true)) {
             return false;
@@ -421,11 +438,11 @@ final class FileUploader
     }
 
     /**
-     * Delete file from disk
+     * Delete a file from the disk
      *
      * @throws MissingFile
      */
-    public static function remove(string $path, bool $throwError = true, string $disk = null): bool
+    public static function remove(string $path, bool $throwError = true, ?string $disk = null): bool
     {
         if ($throwError && ! Storage::disk(self::getDisk($disk))->exists($path)) {
             throw new MissingFile('File does not exist!');
@@ -435,12 +452,12 @@ final class FileUploader
     }
 
     /**
-     * Get meta data for a specific file.
+     * Get metadata for a specific file.
      *
      *
      * @return array<string, mixed>
      */
-    public static function meta(string $path, string $disk = null): array
+    public static function meta(string $path, ?string $disk = null): array
     {
         $diskFrom = Storage::disk(self::getDisk($disk));
 
@@ -466,7 +483,7 @@ final class FileUploader
     }
 
     /**
-     * Get all allowed  image extensions
+     * Get all allowed image extensions
      *
      * @return array<int, string>
      */
@@ -528,20 +545,20 @@ final class FileUploader
     }
 
     /**
-     * Get directory for the specific user
+     * Get a directory for the specific user
      *
      * @return string Specific user directory
      *
      * @example uploads/{user_id}/{type}/{filename}
      */
-    private static function getUserDir(string $filename, string $type = self::FILE, int $user_id = null): string
+    private static function getUserDir(string $filename, string $type = self::FILE, ?int $user_id = null): string
     {
         $defaults = self::getConfig();
 
         $dir = $defaults['path'] ?? self::UPLOAD_PATH;
 
         return trim(strtr($dir, [
-            '{user_id}' => $user_id,
+            '{user_id}' => $user_id ?: 'guest',
             '{type}' => $type,
             '{filename}' => $filename,
         ]), '/\\');
@@ -609,7 +626,7 @@ final class FileUploader
             'audio/aiff', 'audio/x-aiff', 'audio/midi' => 'midi.png',
             'application/x-troff-msvideo', 'video/avi', 'video/msvideo', 'video/x-msvideo', 'video/avs-video' => 'avi.png',
             'video/animaflex' => 'fla.png',
-            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-word.document.macroEnabled.12', 'application/vnd.ms-word.template.macroEnabled.12', 'application/vnd.oasis.opendocument.text', 'application/vnd.apple.pages', 'application/vnd.ms-xpsdocument', 'application/oxps', 'application/rtf', 'application/wordperfect', 'application/octet-stream' => 'docx.png',
+            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-word.document.macroEnabled.12', 'application/vnd.ms-word.template.macroEnabled.12', 'application/vnd.oasis.opendocument.text', 'application/vnd.apple.pages', 'application/vnd.ms-xpsdocument', 'application/oxps', 'application/rtf', 'application/wordperfect', 'application/pkcs7-mime', 'application/x-pkcs7-mime', 'application/octet-stream' => 'docx.png',
             'application/x-compressed', 'application/x-7z-compressed', 'application/x-gzip', 'application/zip', 'multipart/x-gzip', 'multipart/x-zip' => 'zip.png',
             'application/x-gtar', 'application/rar', 'application/x-tar' => 'rar.png',
             'video/mpeg', 'audio/mpeg' => 'mpeg.png',
@@ -681,9 +698,14 @@ final class FileUploader
             'xls' => 'application/vnd.ms-excel',
             'ppt' => 'application/vnd.ms-powerpoint',
 
-            // open office
+            // OpenOffice
             'odt' => 'application/vnd.oasis.opendocument.text',
             'ods' => 'application/vnd.oasis.opendocument.spreadsheet',
+
+            // p7m
+            'p7m' => 'application/pkcs7-mime',
+            // 'p7m' => 'application/x-pkcs7-mime',
+
         ];
 
         $arr = explode('.', $filename);
@@ -695,7 +717,6 @@ final class FileUploader
             if ($fileInfo) {
                 $mimetype = finfo_file($fileInfo, $filename);
                 finfo_close($fileInfo);
-
                 return $mimetype;
             }
         }
@@ -720,7 +741,7 @@ final class FileUploader
     }
 
     /**
-     * converts KB,MB,GB,TB,PB,EB,ZB,YB to bytes
+     * converts KB, MB, GB, TB, PB, EB, ZB, YB to bytes
      *
      *
      * @example 1KB => 1000 (bytes)
@@ -765,6 +786,6 @@ final class FileUploader
             'YB' => number_format($bytes / pow(1024, 8), $decimal_places),
         ];
 
-        return isset($formulas[$to]) ? $formulas[$to].$to : 0 .$to;
+        return isset($formulas[$to]) ? $formulas[$to].$to : '0'.$to;
     }
 }

@@ -11,7 +11,7 @@ return [
     |
     */
 
-    'disk' => env('FILESYSTEM_DISK', 'local'),
+    'disk' => env('FILE_UPLOADER_DISK', env('FILESYSTEM_DISK', 'local')),
 
     'visibility' => 'public',
 

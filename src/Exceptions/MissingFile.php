@@ -2,8 +2,6 @@
 
 namespace ErlandMuchasaj\LaravelFileUploader\Exceptions;
 
-use Exception;
-
-class MissingFile extends Exception
+class MissingFile extends FileException
 {
 }

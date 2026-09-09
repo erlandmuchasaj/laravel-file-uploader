@@ -2,8 +2,6 @@
 
 namespace ErlandMuchasaj\LaravelFileUploader\Exceptions;
 
-use Exception;
-
-class InvalidUpload extends Exception
+class InvalidUpload extends FileException
 {
 }
